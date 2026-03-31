@@ -120,7 +120,7 @@ This format is directly compatible with Obsidian, Logseq, and any Markdown-based
 
 `mark-lit-down` serves as the **data layer** in a larger academic AI ecosystem.
 
-Once your literature database is built, connect it to [**academic-auto-reviewer**](https://github.com/yourusername/academic-auto-reviewer) — a multi-agent, zero-hallucination review workflow that uses local RAG to fact-check and peer-review draft manuscripts.
+Once your literature database is built, connect it to [**academic-auto-reviewer**](https://github.com/Jidi1997/academic-auto-reviewer) — a multi-agent, zero-hallucination review workflow that uses local RAG to fact-check and peer-review draft manuscripts.
 
 ---
 

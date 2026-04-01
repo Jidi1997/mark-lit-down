@@ -1,10 +1,17 @@
 # mark-lit-down
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+<p align="center">
+  <img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge" alt="License"/>
+  <img src="https://img.shields.io/badge/Python-3.9+-blue?style=for-the-badge&logo=python&logoColor=white" alt="Python"/>
+  <img src="https://img.shields.io/badge/OCR-Mistral-orange?style=for-the-badge" alt="OCR"/>
+  <img src="https://img.shields.io/badge/Output-Markdown%20%2B%20YAML-lightgrey?style=for-the-badge" alt="Output"/>
+</p>
 
-**Convert your Zotero library into an LLM-ready, Obsidian-compatible Markdown knowledge base.**
+*A pipeline that converts Zotero libraries into structured, RAG-ready Markdown — with smart fallback, concurrent processing, and zero re-processing overhead.*
 
 `mark-lit-down` bridges the gap between academic reference managers and modern AI workflows. It reads a Zotero BibTeX export, locates the corresponding PDF and HTML attachments, converts them into clean Markdown using [Mistral OCR](https://docs.mistral.ai/capabilities/document/), and outputs a structured local database ready for Retrieval-Augmented Generation (RAG) pipelines or personal knowledge management (PKM) tools like [Obsidian](https://obsidian.md/).
+
+> **Note on OCR Providers:** While Mistral OCR is the current default for PDF processing, the Python implementation is designed to be pluggable. You can adapt the conversion logic for other vision-capable models (e.g., Gemini 2.0 Flash, GPT-4o) or specialized OCR tools like **PaddleOCR**, **olmOCR**, **MinerU**, and **Tesseract**.
 
 ---
 
@@ -28,10 +35,9 @@ graph LR
     B -- PDF --> C["Mistral OCR API"]
     B -- HTML --> D["Trafilatura"]
     B -- None --> E["BibTeX Abstract"]
-    C --> F["citekey.md"]
+    C -->|"+ YAML Frontmatter"| F["citekey.md"]
     D --> F
     E --> F
-    F --> G["YAML Frontmatter Injected"]
 ```
 
 ---
@@ -39,7 +45,7 @@ graph LR
 ## Prerequisites
 
 - Python 3.9+
-- A [Mistral API Key](https://console.mistral.ai/)
+- A [Mistral API Key](https://console.mistral.ai/) (*Required for PDF OCR; HTML and abstract fallbacks function without an API key*)
 - A `.bib` export from [Zotero](https://www.zotero.org/) (the [Better BibTeX](https://retorque.re/zotero-better-bibtex/) plugin is recommended; ensure the export includes linked file paths)
 
 ## Installation
@@ -52,19 +58,16 @@ pip install -r requirements.txt
 
 ## Configuration
 
-All settings are read from **environment variables**. Set them before running:
+All settings are read from **environment variables**. We recommend using a `.env` file or export them directly in your shell:
 
 ```bash
-export MISTRAL_API_KEY="your_key_here"
-export BIB_FILE_PATH="/path/to/library.bib"
+export MISTRAL_API_KEY="your_key_here"      # PDF OCR
+export BIB_FILE_PATH="/path/to/library.bib" # Zotero export
 export ZOTERO_STORAGE_PATH="/path/to/Zotero/storage"
 export OUTPUT_MD_DIR="/path/to/output/markdown_database/"
 export LOG_FILE="/path/to/output/missing_log.txt"
-export MAX_WORKERS=6
+export MAX_WORKERS=6                        # Concurrency level
 ```
-
-Alternatively, edit the default values directly in `marklitdown.py`.
-
 ## Usage
 
 ```bash
@@ -78,11 +81,10 @@ python marklitdown.py
 Initializing Zotero Knowledge Base Engine (Concurrent Workers: 6)
 ==============================================
 
-[Smith2023]  🚀 PDF located. Initiating Mistral OCR cloud conversion...
-  └── [Smith2023] 🎉 Cloud parsing finalized!
-[Jones2021]  📄 HTML located. Initiating lightweight local extraction...
-[Wang2020]   ⏭️ Intercepted: Valid Mistral frontmatter found. Skipping.
-[Doe1999]    ❌ No usable data. Logging to missing entries.
+[Smith2023]  [PDF → OCR] ... done
+[Jones2021]  [HTML → MD] ... done
+[Wang2020]   [SKIPPED] (Valid frontmatter found)
+[Doe1999]    [MISSING] (No usable data — logged)
 
 ✅ Batch processing complete! 1 missing records written to missing_log.txt
 ```
@@ -101,14 +103,26 @@ status: complete
 ---
 
 # Abstract
-This paper investigates...
+This paper investigates the relationship between...
+
+# 1. Introduction
+Academic research has long suggested that...
+
+# 2. Methodology
+We apply a Difference-in-Differences (DID) approach combined with...
+
+# 3. Results
+The empirical findings demonstrate a significant positive association between...
+
+# 4. Conclusion
+In summary, this study provides evidence that...
 ```
 
 This format is directly compatible with Obsidian, Logseq, and any Markdown-based RAG pipeline.
 
 ---
 
-## ⚠️ API Usage, Cost & Privacy
+## API Usage & Privacy Notes
 
 - **Pricing**: As of March 2026, the Mistral OCR API is **free** for standard usage tiers. Check [Mistral's pricing page](https://mistral.ai/pricing/) for the latest information.
 - **Data Retention**: Uploaded documents may be **temporarily retained** on Mistral's servers. If your papers contain sensitive, unpublished, or proprietary research data, evaluate the privacy implications before processing. Consider processing only published literature and keeping unpublished manuscripts local.
@@ -119,8 +133,7 @@ This format is directly compatible with Obsidian, Logseq, and any Markdown-based
 ## Ecosystem
 
 `mark-lit-down` serves as the **data layer** in a larger academic AI ecosystem.
-
-Once your literature database is built, connect it to [**academic-auto-reviewer**](https://github.com/Jidi1997/academic-auto-reviewer) — a multi-agent, zero-hallucination review workflow that uses local RAG to fact-check and peer-review draft manuscripts.
+Once your literature database is built, connect it to [**academic-auto-reviewer**](https://github.com/Jidi1997/academic-auto-reviewer) — a multi-agent review workflow. The Markdown files produced here serve as the grounded truth-source for the `auditor` agent, enabling fact-checking and automated peer review without live web access.
 
 ---
 

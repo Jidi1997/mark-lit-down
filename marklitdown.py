@@ -12,10 +12,10 @@ import threading
 # or edit the defaults below for local use.
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 
-BIB_FILE_PATH = os.getenv("BIB_FILE_PATH", "/Users/mydoc/Downloads/ob_template/library.bib")
-ZOTERO_STORAGE_PATH = os.getenv("ZOTERO_STORAGE_PATH", "/Users/mydoc/Zotero/storage")
-OUTPUT_MD_DIR = os.getenv("OUTPUT_MD_DIR", "/Users/mydoc/Downloads/inquiry_md_database/")
-LOG_FILE = os.getenv("LOG_FILE", "/Users/mydoc/Downloads/inquiry_md_database/missing_log.txt")
+BIB_FILE_PATH = os.getenv("BIB_FILE_PATH", "./library.bib")
+ZOTERO_STORAGE_PATH = os.getenv("ZOTERO_STORAGE_PATH", "./storage")
+OUTPUT_MD_DIR = os.getenv("OUTPUT_MD_DIR", "./markdown_database/")
+LOG_FILE = os.getenv("LOG_FILE", "./markdown_database/missing_log.txt")
 
 # Concurrent execution threads: M4 chips can handle many, but respect API rate limits. 5-10 is recommended.
 MAX_WORKERS = int(os.getenv("MAX_WORKERS", 6))

@@ -11,7 +11,7 @@
   <img src="https://img.shields.io/badge/Output-Markdown%20%2B%20YAML-lightgrey?style=for-the-badge" alt="Output"/>
 </p>
 
-*A pipeline that converts Zotero libraries into structured, RAG-ready Markdown — with smart fallback, concurrent processing, and zero re-processing overhead.*
+*A pipeline that converts Zotero libraries into structured, RAG-ready Markdown.*
 
 </div>
 

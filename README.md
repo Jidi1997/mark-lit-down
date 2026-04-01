@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/logo.png" width="200" alt="mark-lit-down logo"/>
+<img src="docs/Image_marklitdown.png" width="600" alt="mark-lit-down cover"/>
 
 # mark-lit-down
 
@@ -25,9 +25,9 @@
 
 | Feature | Description |
 |---|---|
-| **Mistral Cloud OCR** | Converts complex, dual-column academic PDFs with high fidelity — preserving math, tables, and multi-column layouts. |
-| **YAML Frontmatter** | Injects standard YAML metadata (`citekey`, `source`, `status`) into every output file for native Obsidian and downstream RAG compatibility. |
 | **Smart Fallback** | PDF → HTML (via Trafilatura) → BibTeX Abstract. Ensures maximum coverage even when full text is unavailable. |
+| **Mistral OCR** | Converts complex, dual-column academic PDFs with high fidelity — preserving math, tables, and multi-column layouts. |
+| **YAML Frontmatter** | Injects standard YAML metadata (`citekey`, `source`, `status`) into every output file for native Obsidian and downstream RAG compatibility. |
 | **Checkpoint & Skip** | Detects existing files with valid frontmatter and skips them automatically. Re-runs never waste API quota on already-processed entries. |
 | **Concurrent Processing** | Multi-threaded via `ThreadPoolExecutor`. Processes dozens of papers simultaneously, bounded only by API rate limits. |
 

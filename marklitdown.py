@@ -6,6 +6,10 @@ from pathlib import Path
 from mistralai.client import Mistral
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
+from dotenv import load_dotenv
+
+# Load environment variables from .env file if it exists
+load_dotenv()
 
 # ================= CONFIGURATION =================
 # Set these via environment variables (e.g., export MISTRAL_API_KEY=xxx)
@@ -20,6 +24,9 @@ LOG_FILE = os.getenv("LOG_FILE", "./markdown_database/missing_log.txt")
 # Concurrent execution threads: M4 chips can handle many, but respect API rate limits. 5-10 is recommended.
 MAX_WORKERS = int(os.getenv("MAX_WORKERS", 6))
 # =================================================
+
+# 🎯 Thread Safety: trafilatura (lxml) is not fully thread-safe on macOS.
+trafilatura_lock = threading.Lock()
 
 os.makedirs(OUTPUT_MD_DIR, exist_ok=True)
 
@@ -82,7 +89,11 @@ def convert_html_to_md(html_path, output_path):
     try:
         with open(html_path, 'r', encoding='utf-8') as f:
             html_content = f.read()
-        extracted_text = trafilatura.extract(html_content, include_comments=False, include_tables=True)
+            
+        # 🎯 Critical Fix: Wrap in Lock to prevent macOS malloc crash in lxml
+        with trafilatura_lock:
+            extracted_text = trafilatura.extract(html_content, include_comments=False, include_tables=True)
+            
         if extracted_text:
             pure_text = clean_academic_text(extracted_text)
             with open(output_path, 'w', encoding='utf-8') as f: f.write(pure_text)

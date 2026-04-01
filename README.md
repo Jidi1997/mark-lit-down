@@ -64,16 +64,20 @@ pip install -r requirements.txt
 
 ## Configuration
 
-All settings are read from **environment variables**. We recommend using a `.env` file or export them directly in your shell:
+All settings are read from **environment variables** or a **`.env` file**. 
 
-```bash
-export MISTRAL_API_KEY="your_key_here"      # PDF OCR
-export BIB_FILE_PATH="/path/to/library.bib" # Zotero export
-export ZOTERO_STORAGE_PATH="/path/to/Zotero/storage"
-export OUTPUT_MD_DIR="/path/to/output/markdown_database/"
-export LOG_FILE="/path/to/output/missing_log.txt"
-export MAX_WORKERS=6                        # Concurrency level
-```
+1. Copy the example template:
+   ```bash
+   cp .env.example .env
+   ```
+2. Open `.env` and fill in your specific paths and API key:
+   ```bash
+   MISTRAL_API_KEY="your_key_here"      # PDF OCR
+   BIB_FILE_PATH="/path/to/library.bib" # Zotero export
+   # ... and other variables
+   ```
+
+The script will automatically detect and load these settings at runtime.
 ## Usage
 
 ```bash

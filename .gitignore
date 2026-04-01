@@ -7,3 +7,4 @@ dist/
 build/
 .DS_Store
 missing_log.txt
+markdown_database/

@@ -1,3 +1,7 @@
+<div align="center">
+
+<img src="docs/logo.png" width="200" alt="mark-lit-down logo"/>
+
 # mark-lit-down
 
 <p align="center">
@@ -9,9 +13,11 @@
 
 *A pipeline that converts Zotero libraries into structured, RAG-ready Markdown — with smart fallback, concurrent processing, and zero re-processing overhead.*
 
+</div>
+
 `mark-lit-down` bridges the gap between academic reference managers and modern AI workflows. It reads a Zotero BibTeX export, locates the corresponding PDF and HTML attachments, converts them into clean Markdown using [Mistral OCR](https://docs.mistral.ai/capabilities/document/), and outputs a structured local database ready for Retrieval-Augmented Generation (RAG) pipelines or personal knowledge management (PKM) tools like [Obsidian](https://obsidian.md/).
 
-> **Note on OCR Providers:** While Mistral OCR is the current default for PDF processing, the Python implementation is designed to be pluggable. You can adapt the conversion logic for other vision-capable models (e.g., Gemini 2.0 Flash, GPT-4o) or specialized OCR tools like **PaddleOCR**, **olmOCR**, **MinerU**, and **Tesseract**.
+(Note: While Mistral OCR is the default, the implementation is pluggable for other models like Gemini 1.5/2.0, GPT-4o, or tools like PaddleOCR, olmOCR, MinerU, and Tesseract.)
 
 ---
 

@@ -4,36 +4,47 @@
 
 # mark-lit-down
 
-<p align="center">
-  <img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge" alt="License"/>
-  <img src="https://img.shields.io/badge/Python-3.9+-blue?style=for-the-badge&logo=python&logoColor=white" alt="Python"/>
-  <img src="https://img.shields.io/badge/OCR-Mistral-orange?style=for-the-badge" alt="OCR"/>
-  <img src="https://img.shields.io/badge/Output-Markdown%20%2B%20YAML-lightgrey?style=for-the-badge" alt="Output"/>
-</p>
-
-*A pipeline that converts Zotero libraries into structured, RAG-ready Markdown.*
+*A local knowledge-base builder for researchers: convert Zotero libraries into structured Markdown for review, retrieval, and AI workflows.*
+**[English]** | [中文](README_zh.md)
 
 </div>
 
-`mark-lit-down` bridges the gap between academic reference managers and modern AI workflows. It reads a Zotero BibTeX export, locates the corresponding PDF and HTML attachments, converts them into clean Markdown using [Mistral OCR](https://docs.mistral.ai/capabilities/document/), and outputs a structured local database ready for Retrieval-Augmented Generation (RAG) pipelines or personal knowledge management (PKM) tools like [Obsidian](https://obsidian.md/).
+`mark-lit-down` turns a Zotero library into a structured local Markdown database. It reads a BibTeX export, locates linked PDF and HTML attachments, extracts the best available text, and writes normalized Markdown files that can be used by RAG pipelines, note-taking tools, or downstream review systems such as [academic-auto-reviewer](https://github.com/Jidi1997/academic-auto-reviewer).
 
-(Note: While Mistral OCR is the default, the implementation is pluggable for other models like Gemini 1.5/2.0, GPT-4o, or tools like PaddleOCR, olmOCR, MinerU, and Tesseract.)
+## What It Does
 
----
+- Builds a local Markdown literature database from Zotero exports
+- Uses a priority pipeline of `PDF OCR -> HTML extraction -> abstract fallback`
+- Writes normalized YAML frontmatter for every output file
+- Produces a processing manifest for downstream inspection and tooling
+- Supports local-first academic workflows for review, retrieval, and PKM
 
-## Features
+## Why This Project
 
-| Feature | Description |
-|---|---|
-| **Smart Fallback** | PDF → HTML (via Trafilatura) → BibTeX Abstract. Ensures maximum coverage even when full text is unavailable. |
-| **Mistral OCR** | Converts complex, dual-column academic PDFs with high fidelity — preserving math, tables, and multi-column layouts. |
-| **YAML Frontmatter** | Injects standard YAML metadata (`citekey`, `source`, `status`) into every output file for native Obsidian and downstream RAG compatibility. |
-| **Checkpoint & Skip** | Detects existing files with valid frontmatter and skips them automatically. Re-runs never waste API quota on already-processed entries. |
-| **Concurrent Processing** | Multi-threaded via `ThreadPoolExecutor`. Processes dozens of papers simultaneously, bounded only by API rate limits. |
+Many research tools help you manage citations, but fewer tools turn your literature library into a clean, inspectable, AI-ready local database. `mark-lit-down` focuses on that conversion layer.
 
----
+The output is designed to be useful in three scenarios:
 
-## How It Works
+- grounded RAG and local literature search
+- downstream manuscript review workflows
+- personal knowledge management in Markdown-native tools
+
+## Quickstart
+
+1. Export `library.bib` from Zotero
+2. Configure `.env` with your BibTeX path, Zotero storage path, and output directory
+3. Run the converter
+4. Inspect the generated Markdown files and processing manifest
+
+```bash
+git clone https://github.com/Jidi1997/mark-lit-down.git
+cd mark-lit-down
+pip install -r requirements.txt
+cp .env.example .env
+python marklitdown.py
+```
+
+## Workflow Overview
 
 ```mermaid
 graph LR
@@ -41,111 +52,134 @@ graph LR
     B -- PDF --> C["Mistral OCR API"]
     B -- HTML --> D["Trafilatura"]
     B -- None --> E["BibTeX Abstract"]
-    C -->|"+ YAML Frontmatter"| F["citekey.md"]
+    C --> F["citekey.md"]
     D --> F
     E --> F
+    F --> G["manifest.json"]
 ```
 
----
+## Features
 
-## Prerequisites
+| Feature | Description |
+|---|---|
+| **Priority fallback** | PDF OCR first, then HTML extraction, then abstract-only fallback when full text is unavailable. |
+| **Normalized frontmatter** | Every output file includes consistent YAML metadata such as `citekey`, `source`, and `status`. |
+| **Processing manifest** | Each run generates a machine-readable `manifest.json` that records how every entry was handled. |
+| **Checkpoint and skip** | Existing OCR-complete files are detected and skipped to conserve OCR quota. |
+| **Concurrent processing** | Uses `ThreadPoolExecutor` to process multiple papers in parallel. |
 
-- Python 3.9+
-- A [Mistral API Key](https://console.mistral.ai/) (*Required for PDF OCR; HTML and abstract fallbacks function without an API key*)
-- A `.bib` export from [Zotero](https://www.zotero.org/) (the [Better BibTeX](https://retorque.re/zotero-better-bibtex/) plugin is recommended; ensure the export includes linked file paths)
+## Inputs and Outputs
 
-## Installation
+**Primary input**
 
-```bash
-git clone https://github.com/yourusername/mark-lit-down.git
-cd mark-lit-down
-pip install -r requirements.txt
-```
+- A Zotero BibTeX export, usually `library.bib`
 
-## Configuration
+**Expected supporting input**
 
-All settings are read from **environment variables** or a **`.env` file**. 
+- Zotero attachment storage with linked PDF and/or HTML files
+- Optional Mistral API key for PDF OCR
 
-1. Copy the example template:
-   ```bash
-   cp .env.example .env
-   ```
-2. Open `.env` and fill in your specific paths and API key:
-   ```bash
-   MISTRAL_API_KEY="your_key_here"      # PDF OCR
-   BIB_FILE_PATH="/path/to/library.bib" # Zotero export
-   # ... and other variables
-   ```
+**Generated output**
 
-The script will automatically detect and load these settings at runtime.
-## Usage
+- One Markdown file per citekey, for example `Smith2023.md`
+- A `manifest.json` processing report
+- A `missing_log.txt` summary for unresolved entries
 
-```bash
-python marklitdown.py
-```
+## Output Schema
 
-### Example Output
-
-```
-==============================================
-Initializing Zotero Knowledge Base Engine (Concurrent Workers: 6)
-==============================================
-
-[Smith2023]  [PDF → OCR] ... done
-[Jones2021]  [HTML → MD] ... done
-[Wang2020]   [SKIPPED] (Valid frontmatter found)
-[Doe1999]    [MISSING] (No usable data — logged)
-
-✅ Batch processing complete! 1 missing records written to missing_log.txt
-```
-
----
-
-## Output Format
-
-Each output file is named by its BibTeX citekey (e.g., `Smith2023.md`) and contains standard YAML frontmatter:
+Every generated Markdown file uses the same YAML schema regardless of extraction route:
 
 ```markdown
 ---
 citekey: Smith2023
-source: mistral_ocr
+source: pdf ocr
 status: complete
 ---
 
-# Abstract
-This paper investigates the relationship between...
-
 # 1. Introduction
-Academic research has long suggested that...
-
-# 2. Methodology
-We apply a Difference-in-Differences (DID) approach combined with...
-
-# 3. Results
-The empirical findings demonstrate a significant positive association between...
-
-# 4. Conclusion
-In summary, this study provides evidence that...
+...
 ```
 
-This format is directly compatible with Obsidian, Logseq, and any Markdown-based RAG pipeline.
+Current `source` values:
 
----
+- `pdf ocr`
+- `html`
+- `abstract`
 
-## API Usage & Privacy Notes
+Current `status` values:
 
-- **Pricing**: As of March 2026, the Mistral OCR API is **free** for standard usage tiers. Check [Mistral's pricing page](https://mistral.ai/pricing/) for the latest information.
-- **Data Retention**: Uploaded documents may be **temporarily retained** on Mistral's servers. If your papers contain sensitive, unpublished, or proprietary research data, evaluate the privacy implications before processing. Consider processing only published literature and keeping unpublished manuscripts local.
-- **Rate Limits**: Concurrent requests are bounded by `MAX_WORKERS`. If you encounter HTTP 429 (Too Many Requests) errors, reduce `MAX_WORKERS` to 3–4.
+- `complete`
+- `partial`
 
----
+This consistency makes the database easier to filter, audit, and reuse in downstream pipelines.
+
+## Quality Boundaries
+
+- PDF OCR quality depends on source document quality and layout complexity.
+- HTML extraction depends on the attached page content and publisher markup.
+- Abstract fallback is useful for coverage, but it should be treated as lower-fidelity evidence than full text.
+
+## Configuration
+
+All runtime settings are loaded from environment variables or a `.env` file.
+
+```bash
+MISTRAL_API_KEY=your_api_key_here
+BIB_FILE_PATH=./library.bib
+ZOTERO_STORAGE_PATH=./storage
+OUTPUT_MD_DIR=./markdown_database/
+LOG_FILE=./markdown_database/missing_log.txt
+MANIFEST_FILE=./markdown_database/manifest.json
+MAX_WORKERS=6
+```
+
+For first-time runs, using `MAX_WORKERS=2` or `3` is often safer if you are unsure about OCR rate limits.
+
+## Example Output
+
+```text
+==============================================
+Initializing Zotero Knowledge Base Engine (Concurrent Workers: 6)
+==============================================
+
+[Smith2023]  PDF located. Initiating Mistral OCR cloud conversion...
+[Jones2021]  HTML located. Initiating lightweight local extraction...
+[Wang2020]   Intercepted: Valid Mistral frontmatter found. Skipping processing to conserve API quota.
+[Doe1999]    No usable data. Logging to missing entries.
+
+Batch processing complete! 1 missing records have been written to missing_log.txt
+```
 
 ## Ecosystem
 
-`mark-lit-down` serves as the **data layer** in a larger academic AI ecosystem.
-Once your literature database is built, connect it to [**academic-auto-reviewer**](https://github.com/Jidi1997/academic-auto-reviewer) — a multi-agent review workflow. The Markdown files produced here serve as the grounded truth-source for the `auditor` agent, enabling fact-checking and automated peer review without live web access.
+`mark-lit-down` works well as the data layer for [academic-auto-reviewer](https://github.com/Jidi1997/academic-auto-reviewer).
 
----
+- `mark-lit-down` standardizes your literature assets into local Markdown files
+- `academic-auto-reviewer` uses those files as grounded evidence for citation audit and manuscript review
+
+The two projects can be used independently, but they are designed to work especially well together.
+
+## FAQ
+
+### Do I need Zotero?
+
+The current workflow is built around Zotero-style BibTeX exports and linked attachment storage.
+
+### Do I need Mistral?
+
+Only for PDF OCR. HTML extraction and abstract fallback can still run without a Mistral API key.
+
+### What happens if PDF parsing fails?
+
+The pipeline falls back to HTML extraction when available, and then to the BibTeX abstract if no richer source can be processed.
+
+### Is this only for RAG?
+
+No. The output can also be used for local search, note-taking, or downstream review workflows.
+
+### Can I use this with unpublished or sensitive documents?
+
+Be careful. OCR providers may temporarily retain uploaded documents. Review the provider's privacy policy before processing sensitive files.
 
 ## License
 

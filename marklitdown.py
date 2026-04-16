@@ -1,5 +1,6 @@
 import os
 import re
+import json
 import bibtexparser
 import trafilatura
 from pathlib import Path
@@ -20,6 +21,7 @@ BIB_FILE_PATH = os.getenv("BIB_FILE_PATH", "./library.bib")
 ZOTERO_STORAGE_PATH = os.getenv("ZOTERO_STORAGE_PATH", "./storage")
 OUTPUT_MD_DIR = os.getenv("OUTPUT_MD_DIR", "./markdown_database/")
 LOG_FILE = os.getenv("LOG_FILE", "./markdown_database/missing_log.txt")
+MANIFEST_FILE = os.getenv("MANIFEST_FILE", "./markdown_database/manifest.json")
 
 # Concurrent execution threads: M4 chips can handle many, but respect API rate limits. 5-10 is recommended.
 MAX_WORKERS = int(os.getenv("MAX_WORKERS", 6))
@@ -32,11 +34,40 @@ os.makedirs(OUTPUT_MD_DIR, exist_ok=True)
 
 # Create a thread lock to prevent terminal output interleaving from concurrent threads.
 print_lock = threading.Lock()
+manifest_lock = threading.Lock()
 
 def safe_print(msg):
     """Thread-safe terminal output."""
     with print_lock:
         print(msg)
+
+def write_markdown_output(output_path, citekey, source, status, body):
+    """Write normalized Markdown output with consistent YAML frontmatter."""
+    yaml_frontmatter = (
+        f"---\n"
+        f"citekey: {citekey}\n"
+        f"source: {source}\n"
+        f"status: {status}\n"
+        f"---\n\n"
+    )
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(yaml_frontmatter + body.strip() + "\n")
+
+def append_manifest_record(record):
+    """Persist a normalized processing manifest for downstream tooling."""
+    with manifest_lock:
+        manifest_path = Path(MANIFEST_FILE)
+        existing = []
+        if manifest_path.exists():
+            try:
+                existing = json.loads(manifest_path.read_text(encoding='utf-8'))
+            except Exception:
+                existing = []
+        existing.append(record)
+        manifest_path.write_text(
+            json.dumps(existing, ensure_ascii=False, indent=2),
+            encoding='utf-8'
+        )
 
 def parse_zotero_file_field(file_str):
     """Intelligently parse the 'file' field in Zotero BibTeX exports."""
@@ -96,11 +127,10 @@ def convert_html_to_md(html_path, output_path):
             
         if extracted_text:
             pure_text = clean_academic_text(extracted_text)
-            with open(output_path, 'w', encoding='utf-8') as f: f.write(pure_text)
-            return True
-        return False
+            return pure_text if pure_text else None
+        return None
     except Exception:
-        return False
+        return None
 
 def convert_pdf_with_api(pdf_path, output_dir, citekey):
     """Invoke Mistral OCR API and inject Obsidian-native YAML frontmatter."""
@@ -121,12 +151,8 @@ def convert_pdf_with_api(pdf_path, output_dir, citekey):
         markdowns = [page.markdown for page in pdf_response.pages]
         final_markdown = "\n\n".join(markdowns)
         final_md_path = os.path.join(output_dir, f"{citekey}.md")
-        
-        # 🎯 Core Mechanism: Inject Native Obsidian YAML frontmatter
-        yaml_frontmatter = f"---\ncitekey: {citekey}\nsource: mistral_ocr\nstatus: complete\n---\n\n"
-        final_content = yaml_frontmatter + final_markdown
-        
-        with open(final_md_path, 'w', encoding='utf-8') as f: f.write(final_content)
+
+        write_markdown_output(final_md_path, citekey, "pdf ocr", "complete", final_markdown)
         return True
     except Exception as e:
         safe_print(f"  [{citekey}] ⚠️ Mistral API Exception: {e}")
@@ -136,15 +162,16 @@ def process_single_entry(entry):
     """Core processing unit invoked by multiple threads: handles logic routing for a single reference."""
     citekey = entry.get('ID')
     final_md_path = os.path.join(OUTPUT_MD_DIR, f"{citekey}.md")
-    already_ocred = False
+    existing_source = None
     
     # 1. Identity Check: Verify YAML frontmatter presence
     if os.path.exists(final_md_path):
         try:
             with open(final_md_path, 'r', encoding='utf-8') as f:
                 head_content = f.read(200)
-                if "source: mistral_ocr" in head_content:
-                    already_ocred = True
+                source_match = re.search(r"^source:\s*(.+)$", head_content, re.MULTILINE)
+                if source_match:
+                    existing_source = source_match.group(1).strip()
         except Exception:
             pass
 
@@ -152,42 +179,77 @@ def process_single_entry(entry):
     
     # 2. Priority A: Process PDF
     if files_info['pdf'] and os.path.exists(files_info['pdf']):
-        if already_ocred:
+        if existing_source == "pdf ocr":
             safe_print(f"[{citekey}] ⏭️ Intercepted: Valid Mistral frontmatter found. Skipping processing to conserve API quota.")
-            return citekey, "skipped"
+            return {
+                "citekey": citekey,
+                "result": "skipped",
+                "source": existing_source,
+                "output_file": final_md_path,
+            }
         else:
             safe_print(f"[{citekey}] 🚀 PDF located. Initiating Mistral OCR cloud conversion...")
             if convert_pdf_with_api(files_info['pdf'], OUTPUT_MD_DIR, citekey):
                 safe_print(f"  └── [{citekey}] 🎉 Cloud parsing finalized!")
-                return citekey, "success_pdf"
+                return {
+                    "citekey": citekey,
+                    "result": "success",
+                    "source": "pdf ocr",
+                    "output_file": final_md_path,
+                }
 
     # 3. Priority B: Do not downgrade to HTML if a perfect OCR PDF exists.
-    if already_ocred:
-        return citekey, "skipped"
+    if existing_source == "pdf ocr":
+        return {
+            "citekey": citekey,
+            "result": "skipped",
+            "source": existing_source,
+            "output_file": final_md_path,
+        }
 
     # 4. Priority C: Process HTML
     if files_info['html'] and os.path.exists(files_info['html']):
         safe_print(f"[{citekey}] 📄 HTML located. Initiating lightweight local extraction...")
-        if convert_html_to_md(files_info['html'], final_md_path):
-            return citekey, "success_html"
+        html_text = convert_html_to_md(files_info['html'], final_md_path)
+        if html_text:
+            write_markdown_output(final_md_path, citekey, "html", "complete", html_text)
+            return {
+                "citekey": citekey,
+                "result": "success",
+                "source": "html",
+                "output_file": final_md_path,
+            }
 
     # 5. Priority D: Fallback to abstract extraction
     abstract = entry.get('abstract', '').strip()
     if abstract:
         safe_print(f"[{citekey}] 📝 Only abstract found. Generating structural markdown file...")
-        with open(final_md_path, 'w', encoding='utf-8') as f:
-            f.write(f"# Abstract\n\n{abstract}")
-        return citekey, "success_abstract"
+        write_markdown_output(final_md_path, citekey, "abstract", "partial", f"# Abstract\n\n{abstract}")
+        return {
+            "citekey": citekey,
+            "result": "success",
+            "source": "abstract",
+            "output_file": final_md_path,
+        }
 
     # 6. Priority E: No data available. Log the missing entry.
     safe_print(f"[{citekey}] ❌ No usable data. Logging to missing entries.")
-    return citekey, "missing"
+    return {
+        "citekey": citekey,
+        "result": "missing",
+        "source": "missing",
+        "output_file": None,
+    }
 
 def main():
     safe_print(f"\n==============================================")
     safe_print(f"Initializing Zotero Knowledge Base Engine (Concurrent Workers: {MAX_WORKERS})")
     safe_print(f"==============================================\n")
     
+    manifest_path = Path(MANIFEST_FILE)
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text("[]", encoding='utf-8')
+
     with open(BIB_FILE_PATH, 'r', encoding='utf-8') as bibtex_file:
         bib_database = bibtexparser.load(bibtex_file)
 
@@ -200,9 +262,10 @@ def main():
         
         # Collect processing results in real-time
         for future in as_completed(futures):
-            citekey, status = future.result()
-            if status == "missing":
-                missing_entries.append(citekey)
+            result = future.result()
+            append_manifest_record(result)
+            if result["result"] == "missing":
+                missing_entries.append(result["citekey"])
 
     # Compile final missing log
     if missing_entries:

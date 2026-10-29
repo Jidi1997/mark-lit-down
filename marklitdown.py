@@ -4,7 +4,10 @@ import json
 import bibtexparser
 import trafilatura
 from pathlib import Path
-from mistralai.client import Mistral
+try:
+    from mistralai import Mistral
+except ImportError:
+    from mistralai.client import Mistral
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 from dotenv import load_dotenv

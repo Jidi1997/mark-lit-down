@@ -9,32 +9,34 @@
 
 </div>
 
-`mark-lit-down` turns a Zotero library into a structured local Markdown database. It reads a BibTeX export, locates linked PDF and HTML attachments, extracts the best available text, and writes normalized Markdown files that can be used by RAG pipelines, note-taking tools, or downstream review systems such as [academic-auto-reviewer](https://github.com/Jidi1997/academic-auto-reviewer).
+`mark-lit-down` converts a Zotero library into a structured local Markdown database. It reads a BibTeX export file and locates linked PDF and HTML files. Then it extracts clean text and writes normalized Markdown files for RAG pipelines, note systems, or downstream manuscript review systems such as [academic-auto-reviewer](https://github.com/Jidi1997/academic-auto-reviewer).
 
 ## What It Does
 
-- Builds a local Markdown literature database from Zotero exports
-- Uses a priority pipeline of `PDF OCR -> HTML extraction -> abstract fallback`
-- Writes normalized YAML frontmatter for every output file
-- Produces a processing manifest for downstream inspection and tooling
-- Supports local-first academic workflows for review, retrieval, and PKM
+- Builds a local Markdown literature database from Zotero exports.
+- Uses a two-tier extraction engine:
+  - **Tier 1 (Local)**: High-speed extraction with `PyMuPDF4LLM` for born-digital PDFs.
+  - **Tier 2 (Cloud Fallback)**: Adaptive vision OCR with `Gemini 2.5 Flash` for scanned image PDFs.
+  - **Fallback**: HTML extraction and abstract fallback when full text is missing.
+- Writes consistent YAML frontmatter for each output file.
+- Generates a machine-readable processing manifest (`manifest.json`).
+- Preserves the legacy Mistral OCR version in `hst_marklitdown.py`.
 
 ## Why This Project
 
-Many research tools help you manage citations, but fewer tools turn your literature library into a clean, inspectable, AI-ready local database. `mark-lit-down` focuses on that conversion layer.
+Many research tools manage citations. Few tools convert your literature library into a clean, inspectable, AI-ready local database. `mark-lit-down` focuses on this conversion step.
 
-The output is designed to be useful in three scenarios:
+The output supports three common research tasks:
 
-- grounded RAG and local literature search
-- downstream manuscript review workflows
-- personal knowledge management in Markdown-native tools
+- Grounded RAG and local literature search.
+- Downstream manuscript review workflows.
+- Personal knowledge management in Markdown tools like Obsidian.
 
 ## Quickstart
 
-1. Export `library.bib` from Zotero
-2. Configure `.env` with your BibTeX path, Zotero storage path, and output directory
-3. Run the converter
-4. Inspect the generated Markdown files and processing manifest
+1. Export `library.bib` from Zotero.
+2. Copy `.env.example` to `.env` and set your local paths and optional API keys.
+3. Install dependencies and run the converter:
 
 ```bash
 git clone https://github.com/Jidi1997/mark-lit-down.git
@@ -44,55 +46,58 @@ cp .env.example .env
 python marklitdown.py
 ```
 
-## Workflow Overview
+## Workflow Architecture
 
 ```mermaid
-graph LR
-    A["Zotero library.bib"] --> B{"Attachment?"}
-    B -- PDF --> C["Mistral OCR API"]
-    B -- HTML --> D["Trafilatura"]
-    B -- None --> E["BibTeX Abstract"]
-    C --> F["citekey.md"]
-    D --> F
-    E --> F
-    F --> G["manifest.json"]
+graph TD
+    A["Zotero library.bib"] --> B{"Attachment Type?"}
+    B -- "PDF File" --> C{"Born-Digital PDF?"}
+    C -- "Yes (>= 80 chars/page)" --> D["Tier 1: PyMuPDF4LLM<br>(Fast Local CPU, ~2s)"]
+    C -- "No (< 80 chars/page)" --> E["Tier 2: Gemini 2.5 Flash<br>(Adaptive Patching OCR)"]
+    B -- "HTML File" --> F["Trafilatura Local Parser"]
+    B -- "No Attachment" --> G["BibTeX Abstract Fallback"]
+    D --> H["citekey.md"]
+    E --> H
+    F --> H
+    G --> H
+    H --> I["manifest.json"]
 ```
 
 ## Features
 
 | Feature | Description |
 |---|---|
-| **Priority fallback** | PDF OCR first, then HTML extraction, then abstract-only fallback when full text is unavailable. |
-| **Normalized frontmatter** | Every output file includes consistent YAML metadata such as `citekey`, `source`, and `status`. |
-| **Processing manifest** | Each run generates a machine-readable `manifest.json` that records how every entry was handled. |
-| **Checkpoint and skip** | Existing OCR-complete files are detected and skipped to conserve OCR quota. |
-| **Concurrent processing** | Uses `ThreadPoolExecutor` to process multiple papers in parallel. |
+| **Two-Tier Engine** | Local `PyMuPDF4LLM` runs first. `Gemini 2.5 Flash` processes scanned documents with adaptive page slicing. |
+| **Normalized frontmatter** | Every output file includes standard YAML keys: `citekey`, `source`, and `status`. |
+| **Processing manifest** | Each run generates `manifest.json` to record how the engine processed every entry. |
+| **Checkpoint and skip** | The engine identifies and skips existing complete files to save computing time and API quota. |
+| **Concurrent processing** | Uses `ThreadPoolExecutor` to process multiple documents in parallel on modern CPUs. |
 
 ## Inputs and Outputs
 
 **Primary input**
 
-- A Zotero BibTeX export, usually `library.bib`
+- A Zotero BibTeX export, usually `library.bib`.
 
 **Expected supporting input**
 
-- Zotero attachment storage with linked PDF and/or HTML files
-- Optional Mistral API key for PDF OCR
+- Zotero attachment storage with linked PDF and HTML files.
+- Optional Google Gemini API key for scanned PDF OCR.
 
 **Generated output**
 
-- One Markdown file per citekey, for example `Smith2023.md`
-- A `manifest.json` processing report
-- A `missing_log.txt` summary for unresolved entries
+- One Markdown file per CiteKey (e.g. `Smith2023.md`).
+- A `manifest.json` processing report.
+- A `missing_log.txt` summary for entries without text.
 
 ## Output Schema
 
-Every generated Markdown file uses the same YAML schema regardless of extraction route:
+Every generated Markdown file uses standard YAML frontmatter:
 
 ```markdown
 ---
 citekey: Smith2023
-source: pdf ocr
+source: pdf pymupdf
 status: complete
 ---
 
@@ -100,86 +105,72 @@ status: complete
 ...
 ```
 
-Current `source` values:
+Valid `source` values:
 
-- `pdf ocr`
+- `pdf pymupdf`
+- `pdf gemini_ocr`
+- `pdf ocr` (legacy Mistral)
 - `html`
 - `abstract`
 
-Current `status` values:
+Valid `status` values:
 
 - `complete`
 - `partial`
 
-This consistency makes the database easier to filter, audit, and reuse in downstream pipelines.
-
-## Quality Boundaries
-
-- PDF OCR quality depends on source document quality and layout complexity.
-- HTML extraction depends on the attached page content and publisher markup.
-- Abstract fallback is useful for coverage, but it should be treated as lower-fidelity evidence than full text.
-
 ## Configuration
 
-All runtime settings are loaded from environment variables or a `.env` file.
+Set runtime options through environment variables or a `.env` file:
 
 ```bash
-MISTRAL_API_KEY=your_api_key_here
+# Path to your exported Zotero BibTeX library file
 BIB_FILE_PATH=./library.bib
+
+# Path to your Zotero storage folder
 ZOTERO_STORAGE_PATH=./storage
+
+# Output directory for generated Markdown files
 OUTPUT_MD_DIR=./markdown_database/
-LOG_FILE=./markdown_database/missing_log.txt
-MANIFEST_FILE=./markdown_database/manifest.json
+
+# Optional Gemini API key for scanned PDF OCR fallback
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL=gemini-2.5-flash
+GEMINI_PATCH_SIZE=5
+
+# Concurrent worker threads (6 to 8 recommended for Apple Silicon)
 MAX_WORKERS=6
 ```
 
-For first-time runs, using `MAX_WORKERS=2` or `3` is often safer if you are unsure about OCR rate limits.
+## Large-Scale Scanned Documents: Batch API Strategy
 
-## Example Output
+For processing thousands of scanned PDFs, see the technical memorandum:
 
-```text
-==============================================
-Initializing Zotero Knowledge Base Engine (Concurrent Workers: 6)
-==============================================
-
-[Smith2023]  PDF located. Initiating Mistral OCR cloud conversion...
-[Jones2021]  HTML located. Initiating lightweight local extraction...
-[Wang2020]   Intercepted: Valid Mistral frontmatter found. Skipping processing to conserve API quota.
-[Doe1999]    No usable data. Logging to missing entries.
-
-Batch processing complete! 1 missing records have been written to missing_log.txt
-```
+- **[docs/BATCH_VLM_OCR_STRATEGY.md](docs/BATCH_VLM_OCR_STRATEGY.md)**: Details on asynchronous Cloud Batch APIs, 50% cost discounts, and mathematical ID reconciliation.
 
 ## Ecosystem
 
-`mark-lit-down` works well as the data layer for [academic-auto-reviewer](https://github.com/Jidi1997/academic-auto-reviewer).
+`mark-lit-down` serves as the data extraction layer for [academic-auto-reviewer](https://github.com/Jidi1997/academic-auto-reviewer).
 
-- `mark-lit-down` standardizes your literature assets into local Markdown files
-- `academic-auto-reviewer` uses those files as grounded evidence for citation audit and manuscript review
-
-The two projects can be used independently, but they are designed to work especially well together.
+- `mark-lit-down` converts literature attachments into local Markdown files.
+- `academic-auto-reviewer` reads those files to audit citations and manuscripts.
 
 ## FAQ
 
 ### Do I need Zotero?
 
-The current workflow is built around Zotero-style BibTeX exports and linked attachment storage.
+Yes. The workflow reads Zotero BibTeX exports and linked storage attachments.
 
-### Do I need Mistral?
+### Do I need an API key to run this?
 
-Only for PDF OCR. HTML extraction and abstract fallback can still run without a Mistral API key.
+No. Born-digital PDFs, HTML files, and abstracts run completely locally with zero API keys. You only need a Gemini API key if you process scanned image PDFs.
 
 ### What happens if PDF parsing fails?
 
-The pipeline falls back to HTML extraction when available, and then to the BibTeX abstract if no richer source can be processed.
+The pipeline falls back to HTML extraction when available, and then to the BibTeX abstract.
 
-### Is this only for RAG?
+### Where is the old Mistral OCR version?
 
-No. The output can also be used for local search, note-taking, or downstream review workflows.
-
-### Can I use this with unpublished or sensitive documents?
-
-Be careful. OCR providers may temporarily retain uploaded documents. Review the provider's privacy policy before processing sensitive files.
+The historical version remains archived in `hst_marklitdown.py`.
 
 ## License
 

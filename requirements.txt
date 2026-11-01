@@ -1,4 +1,9 @@
 bibtexparser>=1.4.0
 trafilatura>=1.6.0
-mistralai>=1.2.0
+pymupdf>=1.24.0
+pymupdf4llm>=0.0.17
+google-generativeai>=0.8.0
 python-dotenv>=1.0.0
+
+# Optional legacy Mistral OCR dependency for hst_marklitdown.py
+mistralai>=1.2.0

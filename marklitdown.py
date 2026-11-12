@@ -176,9 +176,17 @@ def convert_html_to_md(html_path):
 def convert_pdf_with_pymupdf(pdf_path, output_dir, citekey):
     """Tier 1: High-speed local conversion for born-digital PDFs via PyMuPDF4LLM."""
     try:
+        # Disable experimental GNN layout model to retain standalone equations and math
+        pymupdf4llm.use_layout(False)
         md_text = pymupdf4llm.to_markdown(pdf_path)
         if not md_text or not md_text.strip():
             return False
+        # Clean formatting tags without fusing adjacent words
+        md_text = re.sub(r'</?mark>', '', md_text)
+        md_text = re.sub(r'\*\*\s+\*\*', ' ', md_text)
+        md_text = re.sub(r'_\s+_', ' ', md_text)
+        md_text = re.sub(r'\*\*\*\*', '', md_text)
+        md_text = re.sub(r'__', '', md_text)
         final_md_path = os.path.join(output_dir, f"{citekey}.md")
         write_markdown_output(final_md_path, citekey, "pdf pymupdf", "complete", md_text)
         return True
